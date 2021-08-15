@@ -28,6 +28,7 @@ class TooltipThemeData with Diagnosticable {
   /// Creates the set of properties used to configure [Tooltip]s.
   const TooltipThemeData({
     this.height,
+    this.maxWidth,
     this.padding,
     this.margin,
     this.verticalOffset,
@@ -37,12 +38,13 @@ class TooltipThemeData with Diagnosticable {
     this.textStyle,
     this.waitDuration,
     this.showDuration,
-    this.triggerMode,
-    this.enableFeedback,
   });
 
   /// The height of [Tooltip.child].
   final double? height;
+
+  /// The maximal width of [Tooltip].
+  final double? maxWidth;
 
   /// If provided, the amount of space by which to inset [Tooltip.child].
   final EdgeInsetsGeometry? padding;
@@ -86,22 +88,6 @@ class TooltipThemeData with Diagnosticable {
   /// The length of time that the tooltip will be shown once it has appeared.
   final Duration? showDuration;
 
-  /// The [TooltipTriggerMode] that will show the tooltip.
-  final TooltipTriggerMode? triggerMode;
-
-  /// Whether the tooltip should provide acoustic and/or haptic feedback.
-  ///
-  /// For example, on Android a tap will produce a clicking sound and a
-  /// long-press will produce a short vibration, when feedback is enabled.
-  ///
-  /// This value is used if [Tooltip.enableFeedback] is null.
-  /// If this value is null, the default is true.
-  ///
-  /// See also:
-  ///
-  ///   * [Feedback], for providing platform-specific feedback to certain actions.
-  final bool? enableFeedback;
-
   /// Creates a copy of this object but with the given fields replaced with the
   /// new values.
   TooltipThemeData copyWith({
@@ -115,11 +101,10 @@ class TooltipThemeData with Diagnosticable {
     TextStyle? textStyle,
     Duration? waitDuration,
     Duration? showDuration,
-    TooltipTriggerMode? triggerMode,
-    bool? enableFeedback,
   }) {
     return TooltipThemeData(
       height: height ?? this.height,
+      maxWidth: maxWidth ?? this.maxWidth,
       padding: padding ?? this.padding,
       margin: margin ?? this.margin,
       verticalOffset: verticalOffset ?? this.verticalOffset,
@@ -129,8 +114,6 @@ class TooltipThemeData with Diagnosticable {
       textStyle: textStyle ?? this.textStyle,
       waitDuration: waitDuration ?? this.waitDuration,
       showDuration: showDuration ?? this.showDuration,
-      triggerMode: triggerMode ?? this.triggerMode,
-      enableFeedback: enableFeedback ?? this.enableFeedback,
     );
   }
 
@@ -140,15 +123,15 @@ class TooltipThemeData with Diagnosticable {
   ///
   /// {@macro dart.ui.shadow.lerp}
   static TooltipThemeData? lerp(TooltipThemeData? a, TooltipThemeData? b, double t) {
-    if (a == null && b == null)
-      return null;
+    if (a == null && b == null) return null;
     assert(t != null);
     return TooltipThemeData(
       height: lerpDouble(a?.height, b?.height, t),
+      maxWidth: lerpDouble(a?.maxWidth, b?.maxWidth, t),
       padding: EdgeInsetsGeometry.lerp(a?.padding, b?.padding, t),
       margin: EdgeInsetsGeometry.lerp(a?.margin, b?.margin, t),
       verticalOffset: lerpDouble(a?.verticalOffset, b?.verticalOffset, t),
-      preferBelow: t < 0.5 ? a?.preferBelow: b?.preferBelow,
+      preferBelow: t < 0.5 ? a?.preferBelow : b?.preferBelow,
       excludeFromSemantics: t < 0.5 ? a?.excludeFromSemantics : b?.excludeFromSemantics,
       decoration: Decoration.lerp(a?.decoration, b?.decoration, t),
       textStyle: TextStyle.lerp(a?.textStyle, b?.textStyle, t),
@@ -159,6 +142,7 @@ class TooltipThemeData with Diagnosticable {
   int get hashCode {
     return hashValues(
       height,
+      maxWidth,
       padding,
       margin,
       verticalOffset,
@@ -168,47 +152,43 @@ class TooltipThemeData with Diagnosticable {
       textStyle,
       waitDuration,
       showDuration,
-      triggerMode,
-      enableFeedback
     );
   }
 
   @override
-  bool operator==(Object other) {
-    if (identical(this, other))
-      return true;
-    if (other.runtimeType != runtimeType)
-      return false;
-    return other is TooltipThemeData
-        && other.height == height
-        && other.padding == padding
-        && other.margin == margin
-        && other.verticalOffset == verticalOffset
-        && other.preferBelow == preferBelow
-        && other.excludeFromSemantics == excludeFromSemantics
-        && other.decoration == decoration
-        && other.textStyle == textStyle
-        && other.waitDuration == waitDuration
-        && other.showDuration == showDuration
-        && other.triggerMode == triggerMode
-        && other.enableFeedback == enableFeedback;
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other.runtimeType != runtimeType) return false;
+    return other is TooltipThemeData &&
+        other.height == height &&
+        other.maxWidth == maxWidth &&
+        other.padding == padding &&
+        other.margin == margin &&
+        other.verticalOffset == verticalOffset &&
+        other.preferBelow == preferBelow &&
+        other.excludeFromSemantics == excludeFromSemantics &&
+        other.decoration == decoration &&
+        other.textStyle == textStyle &&
+        other.waitDuration == waitDuration &&
+        other.showDuration == showDuration;
   }
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DoubleProperty('height', height, defaultValue: null));
+    properties.add(DoubleProperty('maxWidth', maxWidth, defaultValue: null));
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('padding', padding, defaultValue: null));
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('margin', margin, defaultValue: null));
     properties.add(DoubleProperty('vertical offset', verticalOffset, defaultValue: null));
-    properties.add(FlagProperty('position', value: preferBelow, ifTrue: 'below', ifFalse: 'above', showName: true, defaultValue: null));
-    properties.add(FlagProperty('semantics', value: excludeFromSemantics, ifTrue: 'excluded', showName: true, defaultValue: null));
+    properties.add(FlagProperty('position',
+        value: preferBelow, ifTrue: 'below', ifFalse: 'above', showName: true, defaultValue: null));
+    properties.add(
+        FlagProperty('semantics', value: excludeFromSemantics, ifTrue: 'excluded', showName: true, defaultValue: null));
     properties.add(DiagnosticsProperty<Decoration>('decoration', decoration, defaultValue: null));
     properties.add(DiagnosticsProperty<TextStyle>('textStyle', textStyle, defaultValue: null));
     properties.add(DiagnosticsProperty<Duration>('wait duration', waitDuration, defaultValue: null));
     properties.add(DiagnosticsProperty<Duration>('show duration', showDuration, defaultValue: null));
-    properties.add(DiagnosticsProperty<TooltipTriggerMode>('triggerMode', triggerMode, defaultValue: null));
-    properties.add(FlagProperty('enableFeedback', value: enableFeedback, ifTrue: 'true', showName: true, defaultValue: null));
   }
 }
 
@@ -239,7 +219,7 @@ class TooltipThemeData with Diagnosticable {
 ///       onPressed: () {},
 ///     ),
 ///   ),
-/// )
+/// ),
 /// ```
 /// {@end-tool}
 class TooltipTheme extends InheritedTheme {
@@ -251,7 +231,8 @@ class TooltipTheme extends InheritedTheme {
     Key? key,
     required this.data,
     required Widget child,
-  }) : assert(data != null), super(key: key, child: child);
+  })  : assert(data != null),
+        super(key: key, child: child);
 
   /// The properties for descendant [Tooltip] widgets.
   final TooltipThemeData data;
@@ -277,27 +258,4 @@ class TooltipTheme extends InheritedTheme {
 
   @override
   bool updateShouldNotify(TooltipTheme oldWidget) => data != oldWidget.data;
-}
-
-/// The method of interaction that will trigger a tooltip.
-/// Used in [Tooltip.triggerMode] and [TooltipThemeData.triggerMode].
-enum TooltipTriggerMode {
-  /// Tooltip will only be shown by calling `ensureTooltipVisible`.
-  manual,
-
-  /// Tooltip will be shown after a long press.
-  ///
-  /// See also:
-  ///
-  ///   * [GestureDetector.onLongPress], the event that is used for trigger.
-  ///   * [Feedback.forLongPress], the feedback method called when feedback is enabled.
-  longPress,
-
-  /// Tooltip will be shown after a single tap.
-  ///
-  /// See also:
-  ///
-  ///   * [GestureDetector.onTap], the event that is used for trigger.
-  ///   * [Feedback.forTap], the feedback method called when feedback is enabled.
-  tap,
 }

@@ -102,6 +102,7 @@ class Tooltip extends StatefulWidget {
     Key? key,
     required this.message,
     this.height,
+    this.maxWidth,
     this.padding,
     this.margin,
     this.verticalOffset,
@@ -112,10 +113,8 @@ class Tooltip extends StatefulWidget {
     this.waitDuration,
     this.showDuration,
     this.child,
-    this.triggerMode,
-    this.enableFeedback,
-  }) : assert(message != null),
-       super(key: key);
+  })  : assert(message != null),
+        super(key: key);
 
   /// The text to display in the tooltip.
   final String message;
@@ -124,6 +123,11 @@ class Tooltip extends StatefulWidget {
   ///
   /// If the [child] is null, then this is the tooltip's intrinsic height.
   final double? height;
+
+  /// The maxWidth of the tooltip.
+  ///
+  /// Sets the maximal width of the tooltip and will force a line break for message if necessary.
+  final double? maxWidth;
 
   /// The amount of space by which to inset the tooltip's [child].
   ///
@@ -203,25 +207,6 @@ class Tooltip extends StatefulWidget {
   /// pointer exits the widget.
   final Duration? showDuration;
 
-  /// The [TooltipTriggerMode] that will show the tooltip.
-  ///
-  /// If this property is null, then [TooltipThemeData.triggerMode] is used.
-  /// If [TooltipThemeData.triggerMode] is also null, the default mode is
-  /// [TooltipTriggerMode.longPress].
-  final TooltipTriggerMode? triggerMode;
-
-  /// Whether the tooltip should provide acoustic and/or haptic feedback.
-  ///
-  /// For example, on Android a tap will produce a clicking sound and a
-  /// long-press will produce a short vibration, when feedback is enabled.
-  ///
-  /// When null, the default value is true.
-  ///
-  /// See also:
-  ///
-  ///  * [Feedback], for providing platform-specific feedback to certain actions.
-  final bool? enableFeedback;
-
   static final Set<_TooltipState> _openedToolTips = <_TooltipState>{};
 
   /// Dismiss all of the tooltips that are currently shown on the screen.
@@ -248,15 +233,16 @@ class Tooltip extends StatefulWidget {
     super.debugFillProperties(properties);
     properties.add(StringProperty('message', message, showName: false));
     properties.add(DoubleProperty('height', height, defaultValue: null));
+    properties.add(DoubleProperty('maxWidth', maxWidth, defaultValue: null));
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('padding', padding, defaultValue: null));
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('margin', margin, defaultValue: null));
     properties.add(DoubleProperty('vertical offset', verticalOffset, defaultValue: null));
-    properties.add(FlagProperty('position', value: preferBelow, ifTrue: 'below', ifFalse: 'above', showName: true, defaultValue: null));
-    properties.add(FlagProperty('semantics', value: excludeFromSemantics, ifTrue: 'excluded', showName: true, defaultValue: null));
+    properties.add(FlagProperty('position',
+        value: preferBelow, ifTrue: 'below', ifFalse: 'above', showName: true, defaultValue: null));
+    properties.add(
+        FlagProperty('semantics', value: excludeFromSemantics, ifTrue: 'excluded', showName: true, defaultValue: null));
     properties.add(DiagnosticsProperty<Duration>('wait duration', waitDuration, defaultValue: null));
     properties.add(DiagnosticsProperty<Duration>('show duration', showDuration, defaultValue: null));
-    properties.add(DiagnosticsProperty<TooltipTriggerMode>('triggerMode', triggerMode, defaultValue: null));
-    properties.add(FlagProperty('enableFeedback', value: enableFeedback, ifTrue: 'true', showName: true, defaultValue: null));
   }
 }
 
@@ -264,16 +250,16 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
   static const double _defaultVerticalOffset = 24.0;
   static const bool _defaultPreferBelow = true;
   static const EdgeInsetsGeometry _defaultMargin = EdgeInsets.zero;
+  static const double _defaultMaxWidth = double.infinity;
   static const Duration _fadeInDuration = Duration(milliseconds: 150);
   static const Duration _fadeOutDuration = Duration(milliseconds: 75);
   static const Duration _defaultShowDuration = Duration(milliseconds: 1500);
   static const Duration _defaultHoverShowDuration = Duration(milliseconds: 100);
   static const Duration _defaultWaitDuration = Duration.zero;
   static const bool _defaultExcludeFromSemantics = false;
-  static const TooltipTriggerMode _defaultTriggerMode = TooltipTriggerMode.longPress;
-  static const bool _defaultEnableFeedback = true;
 
   late double height;
+  late double maxWidth;
   late EdgeInsetsGeometry padding;
   late EdgeInsetsGeometry margin;
   late Decoration decoration;
@@ -289,9 +275,7 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
   late Duration hoverShowDuration;
   late Duration waitDuration;
   late bool _mouseIsConnected;
-  bool _pressActivated = false;
-  late TooltipTriggerMode triggerMode;
-  late bool enableFeedback;
+  bool _longPressActivated = false;
 
   @override
   void initState() {
@@ -301,8 +285,7 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
       duration: _fadeInDuration,
       reverseDuration: _fadeOutDuration,
       vsync: this,
-    )
-      ..addStatusListener(_handleStatusChanged);
+    )..addStatusListener(_handleStatusChanged);
     // Listen to see when a mouse is added.
     RendererBinding.instance!.mouseTracker.addListener(_handleMouseTrackerChange);
     // Listen to global pointer events so that we can hide a tooltip immediately
@@ -329,9 +312,9 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
       case TargetPlatform.macOS:
       case TargetPlatform.linux:
       case TargetPlatform.windows:
-        return const EdgeInsets.symmetric(horizontal: 8.0);
+        return const EdgeInsets.all(8.0);
       default:
-        return const EdgeInsets.symmetric(horizontal: 16.0);
+        return const EdgeInsets.all(16.0);
     }
   }
 
@@ -366,22 +349,22 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
     }
   }
 
-  void _hideTooltip({ bool immediately = false }) {
+  void _hideTooltip({bool immediately = false}) {
     _showTimer?.cancel();
     _showTimer = null;
     if (immediately) {
       _removeEntry();
       return;
     }
-    if (_pressActivated) {
+    if (_longPressActivated) {
       _hideTimer ??= Timer(showDuration, _controller.reverse);
     } else {
       _hideTimer ??= Timer(hoverShowDuration, _controller.reverse);
     }
-    _pressActivated = false;
+    _longPressActivated = false;
   }
 
-  void _showTooltip({ bool immediately = false }) {
+  void _showTooltip({bool immediately = false}) {
     _hideTimer?.cancel();
     _hideTimer = null;
     if (immediately) {
@@ -430,6 +413,7 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
       child: _TooltipOverlay(
         message: widget.message,
         height: height,
+        maxWidth: maxWidth,
         padding: padding,
         margin: margin,
         onEnter: _mouseIsConnected ? (PointerEnterEvent event) => _showTooltip() : null,
@@ -490,15 +474,10 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  void _handlePress() {
-    _pressActivated = true;
+  void _handleLongPress() {
+    _longPressActivated = true;
     final bool tooltipCreated = ensureTooltipVisible();
-    if (tooltipCreated && enableFeedback) {
-      if (triggerMode == TooltipTriggerMode.longPress)
-        Feedback.forLongPress(context);
-      else
-        Feedback.forTap(context);
-    }
+    if (tooltipCreated) Feedback.forLongPress(context);
   }
 
   @override
@@ -529,24 +508,22 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
     }
 
     height = widget.height ?? tooltipTheme.height ?? _getDefaultTooltipHeight();
+    maxWidth = widget.maxWidth ?? tooltipTheme.maxWidth ?? _defaultMaxWidth;
     padding = widget.padding ?? tooltipTheme.padding ?? _getDefaultPadding();
     margin = widget.margin ?? tooltipTheme.margin ?? _defaultMargin;
     verticalOffset = widget.verticalOffset ?? tooltipTheme.verticalOffset ?? _defaultVerticalOffset;
     preferBelow = widget.preferBelow ?? tooltipTheme.preferBelow ?? _defaultPreferBelow;
-    excludeFromSemantics = widget.excludeFromSemantics ?? tooltipTheme.excludeFromSemantics ?? _defaultExcludeFromSemantics;
+    excludeFromSemantics =
+        widget.excludeFromSemantics ?? tooltipTheme.excludeFromSemantics ?? _defaultExcludeFromSemantics;
     decoration = widget.decoration ?? tooltipTheme.decoration ?? defaultDecoration;
     textStyle = widget.textStyle ?? tooltipTheme.textStyle ?? defaultTextStyle;
     waitDuration = widget.waitDuration ?? tooltipTheme.waitDuration ?? _defaultWaitDuration;
     showDuration = widget.showDuration ?? tooltipTheme.showDuration ?? _defaultShowDuration;
     hoverShowDuration = widget.showDuration ?? tooltipTheme.showDuration ?? _defaultHoverShowDuration;
-    triggerMode = widget.triggerMode ?? tooltipTheme.triggerMode ?? _defaultTriggerMode;
-    enableFeedback = widget.enableFeedback ?? tooltipTheme.enableFeedback ?? _defaultEnableFeedback;
 
     Widget result = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onLongPress: (triggerMode == TooltipTriggerMode.longPress) ?
-        _handlePress : null,
-      onTap: (triggerMode == TooltipTriggerMode.tap) ? _handlePress : null,
+      onLongPress: _handleLongPress,
       excludeFromSemantics: true,
       child: Semantics(
         label: excludeFromSemantics ? null : widget.message,
@@ -577,9 +554,9 @@ class _TooltipPositionDelegate extends SingleChildLayoutDelegate {
     required this.target,
     required this.verticalOffset,
     required this.preferBelow,
-  }) : assert(target != null),
-       assert(verticalOffset != null),
-       assert(preferBelow != null);
+  })  : assert(target != null),
+        assert(verticalOffset != null),
+        assert(preferBelow != null);
 
   /// The offset of the target the tooltip is positioned near in the global
   /// coordinate system.
@@ -611,9 +588,9 @@ class _TooltipPositionDelegate extends SingleChildLayoutDelegate {
 
   @override
   bool shouldRelayout(_TooltipPositionDelegate oldDelegate) {
-    return target != oldDelegate.target
-        || verticalOffset != oldDelegate.verticalOffset
-        || preferBelow != oldDelegate.preferBelow;
+    return target != oldDelegate.target ||
+        verticalOffset != oldDelegate.verticalOffset ||
+        preferBelow != oldDelegate.preferBelow;
   }
 }
 
@@ -622,6 +599,7 @@ class _TooltipOverlay extends StatelessWidget {
     Key? key,
     required this.message,
     required this.height,
+    required this.maxWidth,
     this.padding,
     this.margin,
     this.decoration,
@@ -636,6 +614,7 @@ class _TooltipOverlay extends StatelessWidget {
 
   final String message;
   final double height;
+  final double maxWidth;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final Decoration? decoration;
@@ -650,29 +629,32 @@ class _TooltipOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget result = IgnorePointer(
-      child: FadeTransition(
-        opacity: animation,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: height),
-          child: DefaultTextStyle(
-            style: Theme.of(context).textTheme.bodyText2!,
-            child: Container(
-              decoration: decoration,
-              padding: padding,
-              margin: margin,
-              child: Center(
-                widthFactor: 1.0,
-                heightFactor: 1.0,
-                child: Text(
-                  message,
-                  style: textStyle,
-                ),
+        child: FadeTransition(
+      opacity: animation,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: height,
+          maxWidth: maxWidth,
+        ),
+        child: DefaultTextStyle(
+          style: Theme.of(context).textTheme.bodyText2!,
+          child: Container(
+            decoration: decoration,
+            padding: padding,
+            margin: margin,
+            child: Center(
+              widthFactor: 1.0,
+              heightFactor: 1.0,
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: textStyle,
               ),
             ),
           ),
         ),
-      )
-    );
+      ),
+    ));
     if (onEnter != null || onExit != null) {
       result = MouseRegion(
         onEnter: onEnter,
